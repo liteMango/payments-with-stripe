@@ -15,11 +15,17 @@ class StripeService {
    * @param {string} successUrl
    * @param {string} failureUrl
    */
-  async checkoutPayment(context, userId, successUrl, failureUrl) {
+  async checkoutPayment(context, userId, amount, successUrl, failureUrl) {
+    if (!amount || amount <= 0) {
+      contxt.error(new Error("Invalid amount for checkout"));
+      return null;
+    }
+    
+    
     /** @type {import('stripe').Stripe.Checkout.SessionCreateParams.LineItem} */
     const lineItem = {
       price_data: {
-        unit_amount: 1000, // $10.00
+        unit_amount: Math.round{amount}  // Dynamically set the amount (ensure its in cents)
         currency: 'usd',
         product_data: {
           name: 'Product',
@@ -27,6 +33,18 @@ class StripeService {
       },
       quantity: 1,
     };
+
+    // /** @type {import('stripe').Stripe.Checkout.SessionCreateParams.LineItem} */
+    // const lineItem = {
+    //   price_data: {
+    //     unit_amount: 1000, // $10.00
+    //     currency: 'usd',
+    //     product_data: {
+    //       name: 'Product',
+    //     },
+    //   },
+    //   quantity: 1,
+    // };
 
     try {
       return await this.client.checkout.sessions.create({
