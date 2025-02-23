@@ -41,9 +41,20 @@ export default async (context) => {
         return res.redirect(failureUrl, 303);
       }
 
+      // Extract the totla amount from the request body
+const totalAmount = req.body?.totalAmount;
+  if (!totalAmount || totalAmount <= 0) {
+    error('Invalid total amount received.');
+    return res.redirect(failureUrl, 303);
+  }
+//conver to cents
+  const finalAmount = totalAmount * 100;
+
+      
       const session = await stripe.checkoutPayment(
         context,
         userId,
+        finalAmount, //Pass the amount in cents
         successUrl,
         failureUrl
       );
