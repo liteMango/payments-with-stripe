@@ -62,7 +62,7 @@ export default async (context) => {
       
       context.log('Session:');
       context.log(session);
-      log(Created Stripe checkout session for user ${userId}.);
+      log(`Created Stripe checkout session for user ${userId}.`);
       return res.redirect(session.url, 303);
     }
     
@@ -82,8 +82,8 @@ export default async (context) => {
         
         await appwrite.createOrder(databaseId, collectionId, userId, orderId);
         log(
-          Created order document for user ${userId} with Stripe order ID ${orderId}
-        );
+          `Created order document for user ${userId} with Stripe order ID ${orderId}
+        `);
         return res.json({ success: true });
       }
       
