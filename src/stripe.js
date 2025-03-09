@@ -1,89 +1,96 @@
-// <reference types="stripe-event-types" />
+import StripeService from './stripe.js';
+import AppwriteService from './appwrite.js';
+import { getStaticFile, interpolate, throwIfMissing } from './utils.js';
 
-import stripe from 'stripe';
-
-class StripeService {
-  constructor() {
-    // Note: stripe cjs API types are faulty
-    /** @type {import('stripe').Stripe} */
-    // @ts-ignore
-    this.client = stripe(process.env.STRIPE_SECRET_KEY);
+export default async (context) => {
+  const { req, res, log, error } = context;
+  
+  throwIfMissing(process.env, [
+    'STRIPE_SECRET_KEY',
+    'STRIPE_WEBHOOK_SECRET',
+  ]);
+  
+  const databaseId = process.env.APPWRITE_DATABASE_ID ?? 'orders';
+  const collectionId = process.env.APPWRITE_COLLECTION_ID ?? 'orders';
+  
+  if (req.method === 'GET') {
+    const html = interpolate(getStaticFile('index.html'), {
+      APPWRITE_FUNCTION_API_ENDPOINT: process.env.APPWRITE_FUNCTION_API_ENDPOINT,
+      APPWRITE_FUNCTION_PROJECT_ID: process.env.APPWRITE_FUNCTION_PROJECT_ID,
+      APPWRITE_FUNCTION_ID: process.env.APPWRITE_FUNCTION_ID,
+      APPWRITE_DATABASE_ID: databaseId,
+      APPWRITE_COLLECTION_ID: collectionId,
+    });
+    return res.text(html, 200, { 'Content-Type': 'text/html; charset=utf-8' });
   }
-
-  /**
-   * @param {string} userId
-   * @param {string} successUrl
-   * @param {string} failureUrl
-   */
-  async checkoutPayment(context, userId, amount, successUrl, failureUrl) {
-    if (!amount || amount <= 0) {
-      context.error(new Error("Invalid amount for checkout"));
-      return null;
-    }
-
-    /** @type {import('stripe').Stripe.Checkout.SessionCreateParams.LineItem} */
-    const lineItem = {
-      price_data: {
-        unit_amount: Math.round(amount), // Dynamically set the amount (ensure it's in cents)
-        currency: 'usd',
-        product_data: {
-          name: 'Product',
-          
-        },
-      },
-      quantity: 1,
-    };
-
-    
-    // const lineItem = {
-    //   price_data: {
-    //   unit_amount:1000, // Stripe expects amount in cents
-    //   currency: 'usd',
-    //   product_data: {
-    //     name: productName, // Dynamically use product name
-    //   },
-    // },
-    //   quantity: 1,
-    // };
-
-    try {
-      return await this.client.checkout.sessions.create({
-        payment_method_types: ['card'],
-        line_items: [lineItem],
-        success_url: successUrl,
-        cancel_url: failureUrl,
-        client_reference_id: userId,
-        metadata: {
-          userId,
-          
-        },
-        mode: 'payment',
-      });
-      console.log("Checkout session created:", session);  // Log the session details for debugging
-
-    return session;  // Return session URL to frontend for redirection
-    } catch (err) {
-      context.error(err);
-      return null;
-    }
-  }
-
-  /**
-   * @returns {import("stripe").Stripe.DiscriminatedEvent | null}
-   */
-  validateWebhook(context, req) {
-    try {
-      const event = this.client.webhooks.constructEvent(
-        req.bodyBinary,
-        req.headers['stripe-signature'],
-        process.env.STRIPE_WEBHOOK_SECRET
+  
+  const appwrite = new AppwriteService(context.req.headers['x-appwrite-key']);
+  const stripe = new StripeService();
+  
+  switch (req.path) {
+    case '/checkout': {
+      const fallbackUrl = req.scheme + '://' + req.headers['host'] + '/';
+      const successUrl = req.body?.successUrl ?? fallbackUrl;
+      const failureUrl = req.body?.failureUrl ?? fallbackUrl;
+      const userId = req.headers['x-appwrite-user-id'];
+      
+      if (!userId) {
+        error('User ID not found in request.');
+        return res.redirect(failureUrl, 303);
+      }
+      
+      const totalAmount = req.body?.totalAmount;
+      if (!totalAmount || totalAmount <= 0) {
+        error('Invalid total amount received.');
+        return res.redirect(failureUrl, 303);
+      }
+      
+      const finalAmount = totalAmount * 100;
+      
+      const session = await stripe.checkoutPayment(
+        context,
+        userId,
+        finalAmount,
+        successUrl,
+        failureUrl
       );
-      return /** @type {import("stripe").Stripe.DiscriminatedEvent} */ (event);
-    } catch (err) {
-      context.error(err);
-      return null;
+      
+      if (!session) {
+        error('Failed to create Stripe checkout session.');
+        return res.redirect(failureUrl, 303);
+      }
+      
+      context.log('Session:');
+      context.log(session);
+      log(Created Stripe checkout session for user ${userId}.);
+      return res.redirect(session.url, 303);
     }
+    
+    case '/webhook': {
+      const event = stripe.validateWebhook(context, req);
+      if (!event) {
+        return res.json({ success: false }, 401);
+      }
+      
+      context.log('Event:');
+      context.log(event);
+      
+      if (event.type === 'checkout.session.completed') {
+        const session = event.data.object;
+        const userId = session.metadata.userId;
+        const orderId = session.id;
+        
+        await appwrite.createOrder(databaseId, collectionId, userId, orderId);
+        log(
+          Created order document for user ${userId} with Stripe order ID ${orderId}
+        );
+        return res.json({ success: true });
+      }
+      
+      return res.json({ success: true });
+    }
+    
+    default:
+      return res.text('Not Found', 404);
   }
-}
-
-export default StripeService;
+};
