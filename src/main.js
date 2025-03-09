@@ -10,6 +10,7 @@ export default async (context) => {
     'STRIPE_WEBHOOK_SECRET',
   ]);
 
+
   const databaseId = process.env.APPWRITE_DATABASE_ID ?? 'orders';
   const collectionId = process.env.APPWRITE_COLLECTION_ID ?? 'orders';
 
@@ -40,24 +41,23 @@ export default async (context) => {
         error('User ID not found in request.');
         return res.redirect(failureUrl, 303);
       }
-
-      // Extract the totla amount from the request body
-const totalAmount = req.body?.totalAmount;
+       // ✅ Extract the total amount from the request body
+  const totalAmount = req.body?.totalAmount;
   if (!totalAmount || totalAmount <= 0) {
     error('Invalid total amount received.');
     return res.redirect(failureUrl, 303);
   }
-//conver to cents
+
+  // ✅ Convert to cents
   const finalAmount = totalAmount * 100;
 
-      
       const session = await stripe.checkoutPayment(
-        context,
-        userId,
-        finalAmount, //Pass the amount in cents
-        successUrl,
-        failureUrl
-      );
+    context,
+    userId,
+    finalAmount,  // Pass the amount in cents
+    successUrl,
+    failureUrl
+  );
       if (!session) {
         error('Failed to create Stripe checkout session.');
         return res.redirect(failureUrl, 303);
@@ -66,7 +66,7 @@ const totalAmount = req.body?.totalAmount;
       context.log('Session:');
       context.log(session);
 
-      log(`Created Stripe checkout session for user ${userId}.`);
+      log(Created Stripe checkout session for user ${userId}.);
       return res.redirect(session.url, 303);
 
     case '/webhook':
@@ -85,7 +85,7 @@ const totalAmount = req.body?.totalAmount;
 
         await appwrite.createOrder(databaseId, collectionId, userId, orderId);
         log(
-          `Created order document for user ${userId} with Stripe order ID ${orderId}`
+          Created order document for user ${userId} with Stripe order ID ${orderId}
         );
         return res.json({ success: true });
       }
