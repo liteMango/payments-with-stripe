@@ -1,4 +1,4 @@
-/// <reference types="stripe-event-types" />
+// <reference types="stripe-event-types" />
 
 import stripe from 'stripe';
 
@@ -17,32 +17,32 @@ class StripeService {
    */
   async checkoutPayment(context, userId, amount, successUrl, failureUrl) {
     if (!amount || amount <= 0) {
-      contxt.error(new Error("Invalid amount for checkout"));
+      context.error(new Error("Invalid amount for checkout"));
       return null;
     }
-    
-    
+
     /** @type {import('stripe').Stripe.Checkout.SessionCreateParams.LineItem} */
     const lineItem = {
       price_data: {
-        unit_amount: Math.round{amount}  // Dynamically set the amount (ensure its in cents)
+        unit_amount: Math.round(amount), // Dynamically set the amount (ensure it's in cents)
         currency: 'usd',
         product_data: {
           name: 'Product',
+          
         },
       },
       quantity: 1,
     };
 
-    // /** @type {import('stripe').Stripe.Checkout.SessionCreateParams.LineItem} */
+    
     // const lineItem = {
     //   price_data: {
-    //     unit_amount: 1000, // $10.00
-    //     currency: 'usd',
-    //     product_data: {
-    //       name: 'Product',
-    //     },
+    //   unit_amount:1000, // Stripe expects amount in cents
+    //   currency: 'usd',
+    //   product_data: {
+    //     name: productName, // Dynamically use product name
     //   },
+    // },
     //   quantity: 1,
     // };
 
@@ -55,9 +55,13 @@ class StripeService {
         client_reference_id: userId,
         metadata: {
           userId,
+          
         },
         mode: 'payment',
       });
+      console.log("Checkout session created:", session);  // Log the session details for debugging
+
+    return session;  // Return session URL to frontend for redirection
     } catch (err) {
       context.error(err);
       return null;
