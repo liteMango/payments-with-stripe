@@ -54,7 +54,7 @@ export default async (context) => {
       const session = await stripe.checkoutPayment(
     context,
     userId,
-    finalAmount,  // Pass the amount in cents
+    finalAmount,  
     successUrl,
     failureUrl
   );
